@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nine Peaks: Clan of the Lantern</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar"></header>
+  <nav id="tabs"></nav>
+  <main id="main"></main>
+</div>
+<div id="battle" class="hidden">
+  <div class="battle-head">
+    <span id="battle-title"></span>
+    <span class="battle-ctrl">
+      <button data-speed="1">1x</button>
+      <button data-speed="2">2x</button>
+      <button data-speed="4">4x</button>
+      <button data-speed="skip">Skip</button>
+    </span>
+  </div>
+  <canvas id="arena" width="900" height="440"></canvas>
+</div>
+<div id="modal" class="hidden"><div id="modal-box"></div></div>
+<script src="game.js"></script>
+</body>
+</html>
