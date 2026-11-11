@@ -107,7 +107,7 @@ let S = null, tab = 'village', skirmish = null;
 
 function newState() {
   return { name: '', gold: 60, jade: 0, honor: 0, clvl: 1, ninjas: [], inv: {}, relics: [],
-    progress: 0, stamina: MAX_STAM, stamTs: Date.now(), tavern: [], wins: 0, losses: 0, nextId: 1 };
+    gfx: 'high', progress: 0, stamina: MAX_STAM, stamTs: Date.now(), tavern: [], wins: 0, losses: 0, nextId: 1 };
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 function load() {
@@ -567,9 +567,15 @@ function paintCanvases() {
     else { ctx.translate(18, 40); ctx.rotate(0.5); ctx.scale(1.05, 1.05); drawWeapon(ctx, c.dataset.kind); }
     ctx.restore();
   });
+  paintHero();
+}
+function paintHero() {
+  const t = performance.now() / 1000;
   const h = document.querySelector('canvas.hero');
   if (h) {
     const ctx = h.getContext('2d'), key = h.dataset.scene;
+    const team = S.name ? S.ninjas : [{ el: 'ember', weapon: 'wolf' }, { el: 'tide', weapon: 'bo' }, { el: 'gale', weapon: 'kunai' }, { el: 'stone', weapon: 'tetsubo' }];
+    if (use3d()) { R3.heroFrame(h, key, team.map(n => ({ el: n.el, kind: (WMAP[n.weapon] || {}).kind || 'none' })), t); return; }
     if (heroKey !== key) { heroKey = key; heroAmb = mkAmbient(key); }
     const sc = buildScene(key), dr = SCENES[key].dragon;
     ctx.setTransform(SS, 0, 0, SS, 0, 0);
@@ -577,7 +583,6 @@ function paintCanvases() {
     if (dr) { ctx.save(); ctx.translate(0, -40); drawDragon(ctx, t, dr); ctx.restore(); }
     ctx.drawImage(sc.front, 0, 40 * SS, AW * SS, 240 * SS, 0, 0, AW, 240);
     drawAmbient(ctx, heroAmb, SCENES[key].amb, t, 1 / 30, 240);
-    const team = S.name ? S.ninjas : [{ el: 'ember', weapon: 'wolf' }, { el: 'tide', weapon: 'bo' }, { el: 'gale', weapon: 'kunai' }, { el: 'stone', weapon: 'tetsubo' }];
     team.forEach((n, i) => drawNinja(ctx, AW / 2 - (team.length - 1) * 38 + i * 76, 206 + (i % 2) * 14, { el: n.el, kind: (WMAP[n.weapon] || {}).kind || 'none', s: 1.5, t: t + i, bob: Math.sin(t * 3 + i) * 1.5, face: i < team.length / 2 ? 1 : -1 }));
   }
 }
@@ -601,7 +606,8 @@ function mkUnit(d, side, i, n) {
 function startBattle(opts) {
   B.units = S.ninjas.map((n, i) => mkUnit(n, 0, i, S.ninjas.length))
     .concat(opts.enemies.map((e, i) => mkUnit(e, 1, i, opts.enemies.length)));
-  B.texts = []; B.shots = []; B.fx = []; B.shake = 0; B.amb = mkAmbient(opts.scene); B.time = 0; B.done = false; B.opts = opts; B.speed = 1; B.active = true; B.last = 0;
+  B.texts = []; B.shots = []; B.fx = []; B.shake = 0; B.amb = mkAmbient(opts.scene); B.t0 = performance.now();
+  if (use3d()) R3.startBattle(opts.scene, B.units); B.time = 0; B.done = false; B.opts = opts; B.speed = 1; B.active = true; B.last = 0;
   $('#battle-title').textContent = opts.title;
   $('#battle').classList.remove('hidden');
   markSpeed();
@@ -609,14 +615,15 @@ function startBattle(opts) {
 }
 function markSpeed() {
   document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('active', b.dataset.speed === String(B.speed)));
+  $('#gfx-btn').textContent = 'Graphics: ' + GFX_LABEL[use3d() ? S.gfx : '2d'];
 }
 const alive = side => B.units.filter(u => u.side === side && u.hp > 0);
-function say(u, txt, color, big) { B.texts.push({ x: u.x + rnd(-12, 12), y: u.y - 96 * u.scale, txt, color, big, t: 0.9 }); }
+function say(u, txt, color, big) { B.texts.push({ x: u.x + rnd(-12, 12), y: u.y, h: 96 * u.scale, txt, color, big, t: 0.9 }); }
 
 function hurt(u, dmg, color, label) {
   u.hp = Math.max(0, u.hp - dmg); u.flash = 0.15;
   say(u, label || String(Math.round(dmg)), color || '#fff', !!label);
-  if (u.hp <= 0) for (let i = 0; i < 7; i++) B.fx.push({ type: 'puff', x: u.x, y: u.y - 25 * u.scale, vx: rnd(-40, 40), vy: rnd(-50, 10), t: 0.6, T: 0.6 });
+  if (u.hp <= 0) for (let i = 0; i < 7; i++) B.fx.push({ type: 'puff', x: u.x, y: u.y, h: 25 * u.scale, vx: rnd(-40, 40), vy: rnd(-50, 10), t: 0.6, T: 0.6 });
 }
 function step(dt) {
   B.time += dt;
@@ -637,15 +644,15 @@ function step(dt) {
     u.run = 0;
     if (u.timer > 0) continue;
     u.timer = u.cd * rnd(0.9, 1.1); u.anim = 0.25;
-    if (u.kind === 'ranged') B.shots.push({ x1: u.x, y1: u.y - 45, x2: t.x, y2: t.y - 45, t: 0.18, T: 0.18 });
+    if (u.kind === 'ranged') B.shots.push({ x1: u.x, y1: u.y, x2: t.x, y2: t.y, t: 0.18, T: 0.18 });
     if (Math.random() < t.dodge) { say(t, 'dodge', '#9fd3ff'); continue; }
     let dmg = u.atk * rnd(0.85, 1.15), color = '#fff', label;
     if (BEATS[u.el] === t.el) dmg *= 1.25; else if (BEATS[t.el] === u.el) dmg *= 0.85;
     if (Math.random() < u.crit) { dmg *= 1.8; color = '#ffd447'; label = Math.round(dmg) + '!'; }
     hurt(t, dmg, color, label);
-    const ec = ELEMENTS[u.el].color, hy = t.y - 40 * t.scale;
-    B.fx.push({ type: 'slash', x: t.x, y: hy, r: 26 * t.scale, a: rnd(0, 6), color: ec, t: 0.2, T: 0.2 });
-    for (let i = 0; i < (label ? 9 : 4); i++) B.fx.push({ type: 'spark', x: t.x, y: hy, vx: rnd(-70, 70), vy: rnd(-90, 20), color: i % 2 ? ec : '#fff', t: 0.35, T: 0.35 });
+    const ec = ELEMENTS[u.el].color, hy = 40 * t.scale;
+    B.fx.push({ type: 'slash', x: t.x, y: t.y, h: hy, r: 26 * t.scale, a: rnd(0, 6), color: ec, t: 0.2, T: 0.2 });
+    for (let i = 0; i < (label ? 9 : 4); i++) B.fx.push({ type: 'spark', x: t.x, y: t.y, h: hy, vx: rnd(-70, 70), vy: rnd(-90, 20), color: i % 2 ? ec : '#fff', t: 0.35, T: 0.35 });
     if (label) B.shake = 8;
     if (u.fx === 'bleed' && Math.random() < 0.35) { t.bleed = 3; t.bleedDps = u.atk * 0.18; }
     if (u.fx === 'stun' && Math.random() < 0.2) { t.stun = 1; say(t, 'stunned', '#c9a8ff'); }
@@ -661,7 +668,7 @@ function step(dt) {
     p.x -= ux * push; q.x += ux * push; p.y -= uy * push; q.y += uy * push;
   }
   for (const u of B.units) { u.y = Math.max(228, Math.min(AH - 12, u.y)); u.x = Math.max(30, Math.min(AW - 30, u.x)); }
-  for (const t of B.texts) { t.t -= dt; t.y -= 30 * dt; }
+  for (const t of B.texts) { t.t -= dt; t.h += 30 * dt; }
   B.texts = B.texts.filter(t => t.t > 0);
   for (const s of B.shots) s.t -= dt;
   B.shots = B.shots.filter(s => s.t > 0);
@@ -675,61 +682,79 @@ function step(dt) {
     B.done = true; B.win = frac(0) > frac(1);
   }
 }
+const use3d = () => R3.ok && S.gfx !== '2d';
+const GFX_LABEL = { high: '3D High', low: '3D Low', '2d': '2D' };
+function cycleGfx() {
+  const order = R3.ok ? ['high', 'low', '2d'] : ['2d'];
+  S.gfx = order[(order.indexOf(S.gfx) + 1) % order.length];
+  R3.ok && R3.setQuality(S.gfx === 'low' ? 'low' : 'high');
+  if (B.active && use3d()) R3.startBattle(B.opts.scene, B.units);
+  save(); markSpeed();
+}
 function drawBattle() {
-  const ctx = actx, sc = SCENES[B.opts.scene];
-  ctx.save();
+  const ctx = actx, sc = SCENES[B.opts.scene], d3 = use3d();
   ctx.setTransform(SS, 0, 0, SS, 0, 0);
-  if (B.shake > 0.2) ctx.translate(rnd(-B.shake, B.shake), rnd(-B.shake, B.shake));
-  const scn = buildScene(B.opts.scene);
-  ctx.drawImage(scn.back, 0, 0, AW, AH);
-  if (sc.dragon) drawDragon(ctx, B.time, sc.dragon);
-  ctx.drawImage(scn.front, 0, 0, AW, AH);
-  for (const u of [...B.units].sort((p, q) => (p.hp > 0) - (q.hp > 0) || p.y - q.y)) {
-    const face = u.side === 0 ? 1 : -1, a = u.anim / 0.25;
-    const lunge = u.anim > 0 && u.kind !== 'ranged' ? Math.sin(a * Math.PI) * 18 * face : 0;
-    drawNinja(ctx, u.x + lunge, u.y, { el: u.el, kind: u.kind, s: u.scale, face, boss: u.boss, cloth: u.cloth, hat: u.hat,
-      dead: u.hp <= 0, flash: u.flash, t: B.time + u.phase, run: u.run, bob: u.hp > 0 ? Math.sin(B.time * 5 + u.phase) * 1.5 : 0,
-      swing: u.anim > 0 ? -1.3 + (1 - a) * 2.5 : 0.25 });
+  let P;
+  if (d3) {
+    ctx.clearRect(0, 0, AW, AH);
+    R3.battleFrame(B.units, B.time, B.shake, (performance.now() - B.t0) / 1000);
+    P = R3.project;
+  } else {
+    ctx.save();
+    if (B.shake > 0.2) ctx.translate(rnd(-B.shake, B.shake), rnd(-B.shake, B.shake));
+    const scn = buildScene(B.opts.scene);
+    ctx.drawImage(scn.back, 0, 0, AW, AH);
+    if (sc.dragon) drawDragon(ctx, B.time, sc.dragon);
+    ctx.drawImage(scn.front, 0, 0, AW, AH);
+    for (const u of [...B.units].sort((p, q) => (p.hp > 0) - (q.hp > 0) || p.y - q.y)) {
+      const face = u.side === 0 ? 1 : -1, a = u.anim / 0.25;
+      const lunge = u.anim > 0 && u.kind !== 'ranged' ? Math.sin(a * Math.PI) * 18 * face : 0;
+      drawNinja(ctx, u.x + lunge, u.y, { el: u.el, kind: u.kind, s: u.scale, face, boss: u.boss, cloth: u.cloth, hat: u.hat,
+        dead: u.hp <= 0, flash: u.flash, t: B.time + u.phase, run: u.run, bob: u.hp > 0 ? Math.sin(B.time * 5 + u.phase) * 1.5 : 0,
+        swing: u.anim > 0 ? -1.3 + (1 - a) * 2.5 : 0.25 });
+    }
+    drawAmbient(ctx, B.amb, sc.amb, B.time, 1 / 60, AH);
+    ctx.restore();
+    P = (x, y, h) => ({ x, y: y - h, k: 1 });
   }
-  drawAmbient(ctx, B.amb, sc.amb, B.time, 1 / 60, AH);
   for (const s of B.shots) {
-    const k = 1 - s.t / s.T;
-    ctx.save(); ctx.translate(s.x1 + (s.x2 - s.x1) * k, s.y1 + (s.y2 - s.y1) * k - Math.sin(k * Math.PI) * 18); ctx.rotate(B.time * 30); drawShuriken(ctx, 8); ctx.restore();
+    const k = 1 - s.t / s.T, p = P(s.x1 + (s.x2 - s.x1) * k, s.y1 + (s.y2 - s.y1) * k, 45);
+    ctx.save(); ctx.translate(p.x, p.y - Math.sin(k * Math.PI) * 18 * p.k); ctx.rotate(B.time * 30); drawShuriken(ctx, 8 * p.k); ctx.restore();
   }
   for (const f of B.fx) {
-    const k = 1 - f.t / f.T;
+    const k = 1 - f.t / f.T, p = P(f.x, f.y, f.h), q = p.k;
     if (f.type === 'slash') {
       ctx.strokeStyle = f.color; ctx.lineCap = 'round'; ctx.globalAlpha = 1 - k;
-      ctx.lineWidth = 7 * (1 - k) + 1; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.8 + k * 0.5), f.a + k * 2, f.a + k * 2 + 2.2); ctx.stroke();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5 * (1 - k) + 0.5; ctx.stroke();
+      ctx.lineWidth = (7 * (1 - k) + 1) * q; ctx.beginPath(); ctx.arc(p.x, p.y, f.r * q * (0.8 + k * 0.5), f.a + k * 2, f.a + k * 2 + 2.2); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = (2.5 * (1 - k) + 0.5) * q; ctx.stroke();
     } else if (f.type === 'spark') {
-      ctx.globalAlpha = 1 - k; ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(f.x + f.vx * k, f.y + f.vy * k + 60 * k * k, 2.6 * (1 - k) + 0.8, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1 - k; ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(p.x + f.vx * k * q, p.y + (f.vy * k + 60 * k * k) * q, (2.6 * (1 - k) + 0.8) * q, 0, 7); ctx.fill();
     } else {
-      ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#d9d2c6'; ctx.beginPath(); ctx.arc(f.x + f.vx * k, f.y + f.vy * k, 8 + 16 * k, 0, 7); ctx.fill();
+      ctx.globalAlpha = 0.5 * (1 - k); ctx.fillStyle = '#d9d2c6'; ctx.beginPath(); ctx.arc(p.x + f.vx * k * q, p.y + f.vy * k * q, (8 + 16 * k) * q, 0, 7); ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
   for (const u of B.units) {
     if (u.hp <= 0) continue;
-    const w = 38 * u.scale, top = u.y - 84 * u.scale - (u.hat === 'straw' || u.boss ? 10 : 0);
-    ctx.fillStyle = 'rgba(0,0,0,.75)'; rr(ctx, u.x - w / 2 - 2, top - 2, w + 4, 9, 4); ctx.fill();
+    const p = P(u.x, u.y, 84 * u.scale + (u.hat === 'straw' || u.boss ? 10 : 0)), q = p.k, w = 38 * u.scale * q, top = p.y;
+    ctx.fillStyle = 'rgba(0,0,0,.75)'; rr(ctx, p.x - w / 2 - 2, top - 2, w + 4, 9, 4); ctx.fill();
     const hg = ctx.createLinearGradient(0, top, 0, top + 5);
     if (u.side === 0) { hg.addColorStop(0, '#8df0c0'); hg.addColorStop(1, '#2f9a6c'); } else { hg.addColorStop(0, '#ff8a70'); hg.addColorStop(1, '#b02a1c'); }
-    ctx.fillStyle = hg; rr(ctx, u.x - w / 2, top, Math.max(3, w * u.hp / u.maxHp), 5, 2.5); ctx.fill();
+    ctx.fillStyle = hg; rr(ctx, p.x - w / 2, top, Math.max(3, w * u.hp / u.maxHp), 5, 2.5); ctx.fill();
     ctx.font = (u.boss ? 'bold 14px' : 'bold 12px') + ' Georgia'; ctx.textAlign = 'center';
     ctx.strokeStyle = '#000'; ctx.lineWidth = 3.5; ctx.fillStyle = u.boss ? '#ffd76a' : '#fff';
     const label = (u.boss ? u.name : u.name.split(' ').pop()) + '  Lv ' + u.lvl;
-    ctx.strokeText(label, u.x, top - 7); ctx.fillText(label, u.x, top - 7);
-    if (u.stun > 0) { ctx.fillStyle = '#d9c2ff'; ctx.font = 'bold 16px Georgia'; ctx.fillText('✦ ✦', u.x, top + 26); }
-    if (u.bleed > 0) { ctx.fillStyle = '#ff3b2a'; ctx.beginPath(); ctx.arc(u.x - w / 2 - 8, top + 2.5, 3.5, 0, 7); ctx.fill(); }
+    ctx.strokeText(label, p.x, top - 7); ctx.fillText(label, p.x, top - 7);
+    if (u.stun > 0) { ctx.fillStyle = '#d9c2ff'; ctx.font = 'bold 16px Georgia'; ctx.fillText('✦ ✦', p.x, top + 26); }
+    if (u.bleed > 0) { ctx.fillStyle = '#ff3b2a'; ctx.beginPath(); ctx.arc(p.x - w / 2 - 8, top + 2.5, 3.5, 0, 7); ctx.fill(); }
   }
   ctx.textAlign = 'center';
   for (const t of B.texts) {
+    const p = P(t.x, t.y, t.h);
     ctx.font = `bold ${t.big ? 26 : 18}px Georgia`; ctx.globalAlpha = Math.min(1, t.t * 2.5);
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(t.txt, t.x, t.y); ctx.fillStyle = t.color; ctx.fillText(t.txt, t.x, t.y);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeText(t.txt, p.x, p.y); ctx.fillStyle = t.color; ctx.fillText(t.txt, p.x, p.y);
   }
   ctx.globalAlpha = 1;
-  ctx.restore();
 }
 function frame(ts) {
   if (!B.active) return;
@@ -964,6 +989,8 @@ const VIEWS = {
         <span class="bar xp"><i style="width:${n.lvl >= MAX_LVL ? 100 : 100 * n.xp / xpNeed(n.lvl)}%"></i></span></div>`; }).join('') +
       `</div><h2 style="margin-top:16px">Tea House</h2><div class="spread"><span class="dim">Mountain tea restores all stamina.</span>
       <button data-a="tea" ${S.gold >= tea && S.stamina < MAX_STAM ? '' : 'disabled'}>Brew tea (${tea} gold)</button></div>
+      <h2 style="margin-top:16px">Graphics</h2><div class="spread"><span class="dim">3D High looks best. Use 3D Low or 2D if battles feel slow on your device.</span>
+      <button data-a="gfx">${GFX_LABEL[use3d() ? S.gfx : '2d']}</button></div>
       <p style="margin-top:24px"><button data-a="reset">Abandon clan and start over</button></p>`;
   },
   shrine() {
@@ -1026,6 +1053,7 @@ const A = {
     S.gold -= cost; n.xp += Math.ceil(xpNeed(n.lvl) / 2);
     while (n.lvl < MAX_LVL && n.xp >= xpNeed(n.lvl)) { n.xp -= xpNeed(n.lvl); n.lvl++; }
   },
+  gfx() { cycleGfx(); },
   tea() { const c = 40 * S.clvl; if (S.gold >= c && S.stamina < MAX_STAM) { S.gold -= c; S.stamina = MAX_STAM; } },
   relic(v) { const r = RELICS.find(x => x.id === v); if (r && !hasRelic(v) && S.jade >= r.jade) { S.jade -= r.jade; S.relics.push(v); } },
   reset() {
@@ -1039,6 +1067,7 @@ const A = {
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-modal]');
   if (m) { const b = modalBtns[+m.dataset.modal]; closeModal(); if (b && b.cb) b.cb(); return; }
+  if (e.target.closest('#gfx-btn')) { cycleGfx(); return; }
   const sp = e.target.closest('[data-speed]');
   if (sp) { if (sp.dataset.speed === 'skip') skipBattle(); else { B.speed = +sp.dataset.speed; markSpeed(); } return; }
   const el = e.target.closest('[data-a]');
@@ -1057,6 +1086,8 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'clan-name') A.begin(); });
 
 S = load();
+if (!GFX_LABEL[S.gfx]) S.gfx = 'high';
+R3.ok && R3.setQuality(S.gfx === 'low' ? 'low' : 'high');
 render();
 setInterval(() => { if (S.name && $('#battle').classList.contains('hidden')) renderTop(); }, 1000);
-(function heroLoop() { if (document.querySelector('canvas.hero') && $('#battle').classList.contains('hidden')) paintCanvases(); setTimeout(heroLoop, 33); })();
+(function heroLoop() { if (document.querySelector('canvas.hero') && $('#battle').classList.contains('hidden') && !document.hidden) paintHero(); setTimeout(heroLoop, S.gfx === 'low' ? 100 : 40); })();

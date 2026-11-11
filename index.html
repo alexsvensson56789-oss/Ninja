@@ -20,11 +20,14 @@
       <button data-speed="2">2x</button>
       <button data-speed="4">4x</button>
       <button data-speed="skip">Skip</button>
+      <button id="gfx-btn">Graphics</button>
     </span>
   </div>
-  <canvas id="arena" width="900" height="440"></canvas>
+  <div id="arena-wrap"><canvas id="arena3d"></canvas><canvas id="arena" width="900" height="440"></canvas></div>
 </div>
 <div id="modal" class="hidden"><div id="modal-box"></div></div>
+<script src="vendor/three.min.js"></script>
+<script src="render3d.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
