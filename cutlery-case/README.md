@@ -1,21 +1,31 @@
-# Crew Cutlery Case
+# Crew Cutlery Case (v2: slim and rounded, with utensil clips)
 
-A slim travel box with a snap-on lid for a personal fork / knife / spoon set (or chopsticks).
+A slim, pill-shaped travel case with a snap-on lid and clips that hold each utensil in place.
 
-- Outside size: 205 × 52 × 29 mm. Inside: about 199 × 46 × 26 mm, which fits cutlery up to about 195 mm long.
-- Two parts. The lid snaps over a lip on the base with a ridge on each long side, and a thumb notch on the front helps you pop it open.
+- Outside size: 210 × 46 × 24 mm, with every edge rounded
+- Base: spoon and fork nested together, held by 2 snap clips on the handles
+- Lid: knife held by 2 snap clips on the inside
+- The lid clicks onto a lip on the base, and a finger notch on the front helps you open it
 
 ## Files
-- `cutlery_case_plate.stl`: both parts laid out side by side, ready to print together
+- `cutlery_case_plate.stl`: base and lid side by side, ready to print together
 - `cutlery_case_base.stl`, `cutlery_case_lid.stl`: each part on its own
-- `cutlery_case.scad`: parametric source. Change `length` to fit your cutlery, `clearance` for the fit, `snap_bump` for how firmly it clicks, and set `lanes = 2` for divider rails.
+- `cutlery_case.scad`: parametric source
+
+## Fit the clips to your cutlery
+Measure your cutlery with a ruler or calipers, then set these in the .scad file and export again:
+- `spoon_handle_w`: handle width where the clips grab, 120 mm from the head end (default 14)
+- `stack_t`: spoon and fork stacked together, thickness at that point (default 7)
+- `knife_handle_w`, `knife_t`: knife handle width and thickness (defaults 13 and 5)
+- `base_clip_x`, `lid_clip_x`: where the clips sit along the case
+- `grip`: how far the hooks reach over the handle (0.8 by default; use less if the handles are hard to clip in)
 
 ## Print settings
 - PETG, 0.2 mm layers, 3 walls, 15 % infill, no supports
-- Print as laid out: the base open side up, the lid top face down
-- Needs a bed that takes 205 mm (Ender 3, Prusa MK3/MK4, Bambu A1/P1/X1 all work; the Prusa Mini and Bambu A1 mini are too small, so set `length` to 175 for those)
-- About 70 cm³ of solid model, roughly 45–55 g of filament
+- Print as laid out: the base open side up, the lid top face down. The edges that touch the bed are angled so they print cleanly.
+- Needs a bed that takes 210 mm. For smaller printers, reduce `length`.
+- About 54 cm³ of solid model, roughly 40–50 g of filament
 
-## Fit tuning
-- Lid too tight: set `clearance = 0.3` and/or `snap_bump = 0.3`
-- Lid too loose: set `snap_bump = 0.6`
+## Lid fit
+- Too tight: set `clearance = 0.3` or `snap_bump = 0.3`
+- Too loose: set `snap_bump = 0.55`
