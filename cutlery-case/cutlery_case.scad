@@ -4,7 +4,17 @@
 // Lid snaps over a lip on the base. Units: mm. Print in PETG.
 
 /* [What to render] */
-part = "plate";   // [plate, base, lid, assembled, open]
+part = "plate";   // [plate, base, lid, logo, assembled, open]
+
+/* [Lid logo] */
+// Put your own logo SVG next to this file and set its name here, e.g. "logo.svg".
+// Leave empty to use the text below instead.
+logo_file  = "";
+logo_text  = "CREW";
+logo_font  = "DejaVu Sans:style=Bold";
+logo_w     = 95;   // logo width on the lid (mm)
+logo_h     = 22;   // max logo height (mm)
+logo_depth = 0.6;  // recess depth = 3 layers at 0.2 mm
 
 /* [Body] */
 length   = 210;   // outer length (cutlery up to ~200 mm)
@@ -39,6 +49,24 @@ base_clip_x    = [110, 175];  // clip positions along the case (head end at x=0)
 lid_clip_x     = [120, 180];
 
 $fn = 64;
+
+case_color = "#d81e2c";   // red
+logo_color = "#ffffff";
+
+// 2D logo as seen from OUTSIDE, centred on the origin
+module logo_2d() {
+    if (logo_file != "")
+        resize([logo_w, 0], auto=[true, true]) import(logo_file, center=true);
+    else
+        resize([logo_w, 0], auto=[true, true])
+            text(logo_text, font=logo_font, size=10, halign="center", valign="center");
+}
+// logo positioned in lid print coordinates (top face on the bed, so mirrored)
+module logo_solid(extra=0) {
+    translate([length/2, width/2, -0.01]) mirror([0,1,0])
+        linear_extrude(logo_depth + 0.01 + extra)
+            intersection() { logo_2d(); square([logo_w, logo_h], center=true); }
+}
 
 // ---------- rounded body ----------
 // corner profile: round edge on top, 45-degree "teardrop" edge on the side
@@ -128,6 +156,8 @@ module lid() {   // modelled as printed: outside top on the bed
         translate([0,0,lh - lip_h - 0.6]) prism(lid_wall, lip_h + 1);
         // main cavity
         translate([0,0,top_t]) prism(base_wall, lh);
+        // logo recess in the top face
+        logo_solid();
         // snap grooves
         for (side=[0,1])
             translate([length/2, side ? width-lid_wall : lid_wall, lh - snap_z])
@@ -137,14 +167,19 @@ module lid() {   // modelled as printed: outside top on the bed
     for (x=lid_clip_x) translate([x, width/2, top_t - 0.01]) clip(knife_handle_w, knife_t);
 }
 
+// logo inlay: exactly fills the recess, for a second (white) filament
+module logo_inlay() { translate([length/2, width/2, 0]) mirror([0,1,0])
+    linear_extrude(logo_depth) intersection() { logo_2d(); square([logo_w, logo_h], center=true); } }
+
 if (part == "base") base();
 else if (part == "lid") lid();
+else if (part == "logo") translate([0, width + 8, 0]) logo_inlay();   // same spot as on the plate
 else if (part == "assembled") {
-    color("#e8edf2") base();
-    color("#c8102e") translate([0, width, height]) rotate([180,0,0]) lid();
+    color(case_color) base();
+    translate([0, width, height]) rotate([180,0,0]) { color(case_color) lid(); color(logo_color) logo_inlay(); }
 }
 else if (part == "open") {
-    color("#e8edf2") base();
-    color("#c8102e") translate([0, width + 10, 0]) lid();
+    color(case_color) base();
+    translate([0, width + 10, 0]) { color(case_color) lid(); color(logo_color) logo_inlay(); }
 }
-else { base(); translate([0, width + 8, 0]) lid(); }
+else { color(case_color) base(); translate([0, width + 8, 0]) { color(case_color) lid(); color(logo_color) logo_inlay(); } }
